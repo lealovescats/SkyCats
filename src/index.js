@@ -5,6 +5,7 @@ const { getRankedResults, getForgeRankedResults } = require("./calculator");
 const { getGemRankings } = require("./gems");
 const { getForgeSteps, computeRawMaterials, priceMaterials } = require("./drillparts");
 const { getLowestBin } = require("./auctions");
+const { getGoblinEggRankings } = require("./goblineggs");
 const {
   buildResultsEmbed,
   buildForgeResultsEmbed,
@@ -12,6 +13,8 @@ const {
   buildGemsEmbed,
   buildDrillPartsEmbed,
   buildDrillPartsComponents,
+  buildGoblinEggsEmbed,
+  buildGoblinEggsComponents,
 } = require("./format");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -175,6 +178,26 @@ async function respondDrillParts(interaction, startKey, endKey, priceMode, steps
   }
 }
 
+// Shared by the initial /goblineggs command and its price-mode toggle button.
+async function respondGoblinEggs(interaction, priceMode, ownerId) {
+  try {
+    const products = await getBazaarProducts();
+    const embed = buildGoblinEggsEmbed(getGoblinEggRankings(products, priceMode), priceMode);
+    const components = [buildGoblinEggsComponents(priceMode, ownerId)];
+    await interaction.editReply({ embeds: [embed], components });
+
+    const message = await interaction.fetchReply();
+    scheduleButtonRemoval(message);
+  } catch (err) {
+    console.error(err);
+    await interaction.editReply({
+      content: `Something went wrong fetching Bazaar data: \`${err.message}\``,
+      embeds: [],
+      components: [],
+    });
+  }
+}
+
 client.once("clientReady", () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
@@ -235,6 +258,34 @@ async function handleInteraction(interaction) {
 
     await interaction.deferReply();
     await respondDrillParts(interaction, startKey, endKey, "BUYORDER", result.steps, interaction.user.id);
+    return;
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === "goblineggs") {
+    if (await isNotAllowed(interaction)) return;
+    if (await isOnCooldown(interaction)) return;
+
+    await interaction.deferReply();
+    await respondGoblinEggs(interaction, "BUYORDER", interaction.user.id);
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith("ge|")) {
+    const [, priceMode, ownerId] = interaction.customId.split("|");
+
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "You did not run this command, trying to steal huh?",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (await isNotAllowed(interaction)) return;
+    if (await isOnCooldown(interaction)) return;
+
+    await interaction.deferUpdate();
+    await respondGoblinEggs(interaction, priceMode, ownerId);
     return;
   }
 

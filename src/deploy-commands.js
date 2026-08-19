@@ -66,6 +66,12 @@ const commands = [
         .addChoices(...DRILL_PART_CHOICES),
     )
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName("goblineggs")
+    .setDescription("Ranks Goblin Eggs by cheapest bazaar cost per spawned Golden Goblin.")
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
+    .toJSON(),
 ];
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);

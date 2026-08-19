@@ -312,6 +312,50 @@ function buildDrillPartsComponents(startKey, endKey, priceMode, ownerId) {
   return row;
 }
 
+function fieldForGoblinEggRow(row) {
+  return {
+    name: `${emojiTag(row.icon)} ${row.label}`,
+    value: `**${fmtCoinsShort(row.costPerGoblin)} coins** per Goblin _(${row.chance}% chance · ${fmtCoinsShort(row.eggPrice)} per egg)_`,
+  };
+}
+
+function buildGoblinEggsEmbed(rows, priceMode) {
+  const modeLabel = PRICE_MODE_LABEL[priceMode];
+
+  const embed = new EmbedBuilder()
+    .setTitle("🥚 Goblin Egg Value Ranking")
+    .setColor(0xf4c542)
+    .setDescription(
+      `Cheapest coins per spawned Golden Goblin, priced at **${modeLabel}**.\n` +
+        "Each Golden Goblin has a **3.33%** chance to be replaced by a Diamond Goblin.",
+    )
+    .setTimestamp();
+
+  rows.forEach((row, i) => {
+    const medal = MEDALS[i] ?? `${i + 1}.`;
+    const { name, value } = fieldForGoblinEggRow(row);
+    embed.addFields({ name: `${medal} ${name}`, value, inline: false });
+  });
+
+  embed.setFooter({ text: "Made by ilovecatsyes 💜" });
+
+  return embed;
+}
+
+// customId format: "ge|<priceMode>|<ownerId>"
+function buildGoblinEggsComponents(priceMode, ownerId) {
+  const row = new ActionRowBuilder();
+
+  row.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`ge|${OTHER_PRICE_MODE[priceMode]}|${ownerId}`)
+      .setLabel(PRICE_MODE_SWITCH_LABEL[priceMode])
+      .setStyle(ButtonStyle.Success),
+  );
+
+  return row;
+}
+
 module.exports = {
   buildResultsEmbed,
   buildForgeResultsEmbed,
@@ -319,4 +363,6 @@ module.exports = {
   buildGemsEmbed,
   buildDrillPartsEmbed,
   buildDrillPartsComponents,
+  buildGoblinEggsEmbed,
+  buildGoblinEggsComponents,
 };
