@@ -3,8 +3,8 @@ const { Client, GatewayIntentBits, MessageFlags } = require("discord.js");
 const { getBazaarProducts } = require("./hypixel");
 const { getRankedResults, getForgeRankedResults } = require("./calculator");
 const { getGemRankings } = require("./gems");
-const { getForgeSteps, computeRawMaterials, priceMaterials, PARTS } = require("./drillparts");
-const { getLowestBins } = require("./auctions");
+const { getForgeSteps, computeRawMaterials, priceMaterials } = require("./drillparts");
+const { getLowestBin } = require("./auctions");
 const {
   buildResultsEmbed,
   buildForgeResultsEmbed,
@@ -152,8 +152,7 @@ async function respondDrillParts(interaction, startKey, endKey, priceMode, steps
     let lowestBin;
     if (!startKey) {
       try {
-        const bins = await getLowestBins();
-        lowestBin = bins.has(PARTS[endKey].label) ? bins.get(PARTS[endKey].label) : null;
+        lowestBin = await getLowestBin(endKey);
       } catch (err) {
         console.error("Failed to fetch lowest BIN:", err);
         lowestBin = undefined;
