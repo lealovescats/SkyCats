@@ -62,14 +62,32 @@ const CUSTOM_EMOJI = {
   fuel_canister: "1539698603898179585",
   mithril_plate: "1539698710743613523",
   perfect_opal_gem: "1539699502498320425",
+  poppy: "1540495205755658272",
+  dandelion: "1540495208909901895",
+  plant_matter: "1540494691328598147",
+  biofuel: "1540494661624533013",
+  coalroot: "1540494115592998952",
+  volta: "1540494666372218890",
+  oil_barrel: "1540494663956561920",
+  sunflower_oil: "1540494688920797234",
+  ugly_fossil: "1540494681203544197",
+  helix_fossil: "1540494673519579137",
+  tusk_fossil: "1540494676019122249",
+  webbed_fossil: "1540494668721295470",
+  footprint_fossil: "1540494683900481636",
+  spine_fossil: "1540494671237746749",
+  clubbed_fossil: "1540494678665863210",
+  claw_fossil: "1540494686324793416",
+  tumber_plate: "1540500246134788106",
+  fuel_stat: "1540501591893876767",
 };
 
 const emojiTag = (name) => (CUSTOM_EMOJI[name] ? `<:${name}:${CUSTOM_EMOJI[name]}>` : "");
 
 const SELECTION_META = {
-  UMBER: { noun: "Umber", color: 0xc97a3d },
-  TUNGSTEN: { noun: "Tungsten", color: 0x8e7cc3 },
-  HYBRID: { noun: "Hybrid Umber & Tungsten", color: 0xf1c232 },
+  UMBER: { noun: "Umber", color: 0xc97a3d, titleIcon: "umber_plate" },
+  TUNGSTEN: { noun: "Tungsten", color: 0x8e7cc3, titleIcon: "tungsten_plate" },
+  HYBRID: { noun: "Hybrid Umber & Tungsten", color: 0xf1c232, titleIcon: "tumber_plate" },
 };
 
 // Abbreviated coin format, e.g. "2.37 M" instead of "2,370,000".
@@ -80,6 +98,12 @@ function fmtCoinsShort(n) {
   if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)} M`;
   if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)} K`;
   return `${sign}${Math.round(abs).toLocaleString("en-US")}`;
+}
+
+// costPerFuel values are almost always well under 1 coin - fmtCoinsShort
+// would round them all down to "0 coins" and lose the ranking entirely.
+function fmtFuelCost(n) {
+  return n.toFixed(2);
 }
 
 function fmtForgeTime(hours) {
@@ -124,7 +148,7 @@ function buildResultsEmbed(selection, rows) {
   const meta = SELECTION_META[selection];
 
   const embed = new EmbedBuilder()
-    .setTitle("💰 Metal Profit Ranking")
+    .setTitle(`${emojiTag(meta.titleIcon)} Metal Profit Ranking`)
     .setColor(meta.color)
     .setDescription(`Highest profit forge for **${meta.noun}**.`)
     .setTimestamp();
@@ -163,7 +187,7 @@ function buildForgeResultsEmbed(selection, rows) {
   const meta = SELECTION_META[selection];
 
   const embed = new EmbedBuilder()
-    .setTitle("⚒️ Forge Profit Ranking")
+    .setTitle(`${emojiTag(meta.titleIcon)} Forge Profit Ranking`)
     .setColor(meta.color)
     .setDescription(
       `Highest profit forge for **${meta.noun}** - By forge time, profit per slot.`,
@@ -322,8 +346,12 @@ function buildDrillPartsEmbed(startKey, endKey, priceMode, priced, bins) {
           name: "Sell & Rebuy Alternative",
           value:
             `Buy ${endIcon} **${endLabel}**: +${fmtCoinsShort(bins.end)}\n` +
-            `Sell ${startIcon} **${startLabel}**: -${fmtCoinsShort(startProceeds)} _(after ${(taxRate * 100).toFixed(1)}% AH tax)_\n` +
-            `Net cost: **${fmtCoinsShort(netCost)} coins**\n${verdict}`,
+            `Sell ${startIcon} **${startLabel}**: -${fmtCoinsShort(startProceeds)} _(after ${(taxRate * 100).toFixed(1)}% AH tax)_`,
+          inline: false,
+        });
+        embed.addFields({
+          name: "Net Cost",
+          value: `**${fmtCoinsShort(netCost)} coins**\n\n${verdict}`,
           inline: false,
         });
       }
@@ -393,6 +421,47 @@ function buildGoblinEggsComponents(priceMode, ownerId) {
   return row;
 }
 
+function fieldForDrillFuelRow(row) {
+  return {
+    name: `${emojiTag(row.icon)} ${row.label}`,
+    value: `**${fmtFuelCost(row.costPerFuel)} coins** per Fuel _(${fmtCoinsShort(row.price)} per item · ${row.fuelAmount.toLocaleString("en-US")} fuel each)_`,
+  };
+}
+
+function buildDrillFuelEmbed(rows, priceMode) {
+  const modeLabel = PRICE_MODE_LABEL[priceMode];
+
+  const embed = new EmbedBuilder()
+    .setTitle(`${emojiTag("fuel_stat")} Best Drill Fuel`)
+    .setColor(0xe67e22)
+    .setDescription(`Cheapest coins per Fuel point, priced at **${modeLabel}**.`)
+    .setTimestamp();
+
+  rows.forEach((row, i) => {
+    const medal = MEDALS[i] ?? `${i + 1}.`;
+    const { name, value } = fieldForDrillFuelRow(row);
+    embed.addFields({ name: `${medal} ${name}`, value, inline: false });
+  });
+
+  embed.setFooter({ text: "Made by ilovecatsyes 💜" });
+
+  return embed;
+}
+
+// customId format: "df|<priceMode>|<ownerId>"
+function buildDrillFuelComponents(priceMode, ownerId) {
+  const row = new ActionRowBuilder();
+
+  row.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`df|${OTHER_PRICE_MODE[priceMode]}|${ownerId}`)
+      .setLabel(PRICE_MODE_SWITCH_LABEL[priceMode])
+      .setStyle(ButtonStyle.Success),
+  );
+
+  return row;
+}
+
 module.exports = {
   buildResultsEmbed,
   buildForgeResultsEmbed,
@@ -402,4 +471,6 @@ module.exports = {
   buildDrillPartsComponents,
   buildGoblinEggsEmbed,
   buildGoblinEggsComponents,
+  buildDrillFuelEmbed,
+  buildDrillFuelComponents,
 };

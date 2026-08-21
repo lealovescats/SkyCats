@@ -6,6 +6,7 @@ const { getGemRankings } = require("./gems");
 const { getForgeSteps, computeRawMaterials, priceMaterials } = require("./drillparts");
 const { getLowestBin } = require("./auctions");
 const { getGoblinEggRankings } = require("./goblineggs");
+const { getDrillFuelRankings } = require("./drillfuel");
 const {
   buildResultsEmbed,
   buildForgeResultsEmbed,
@@ -15,6 +16,8 @@ const {
   buildDrillPartsComponents,
   buildGoblinEggsEmbed,
   buildGoblinEggsComponents,
+  buildDrillFuelEmbed,
+  buildDrillFuelComponents,
 } = require("./format");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -201,6 +204,26 @@ async function respondGoblinEggs(interaction, priceMode, ownerId) {
   }
 }
 
+// /drillfuel has no options and no buttons - just a straight top-5 embed.
+async function respondDrillFuel(interaction, priceMode, ownerId) {
+  try {
+    const products = await getBazaarProducts();
+    const embed = buildDrillFuelEmbed(getDrillFuelRankings(products, priceMode), priceMode);
+    const components = [buildDrillFuelComponents(priceMode, ownerId)];
+    await interaction.editReply({ embeds: [embed], components });
+
+    const message = await interaction.fetchReply();
+    scheduleButtonRemoval(message);
+  } catch (err) {
+    console.error(err);
+    await interaction.editReply({
+      content: `Something went wrong fetching Bazaar data: \`${err.message}\``,
+      embeds: [],
+      components: [],
+    });
+  }
+}
+
 client.once("clientReady", () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
@@ -261,6 +284,34 @@ async function handleInteraction(interaction) {
 
     await interaction.deferReply();
     await respondDrillParts(interaction, startKey, endKey, "BUYORDER", result.steps, interaction.user.id);
+    return;
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === "drillfuel") {
+    if (await isNotAllowed(interaction)) return;
+    if (await isOnCooldown(interaction)) return;
+
+    await interaction.deferReply();
+    await respondDrillFuel(interaction, "INSTANT", interaction.user.id);
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith("df|")) {
+    const [, priceMode, ownerId] = interaction.customId.split("|");
+
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "You did not run this command, trying to steal huh?",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (await isNotAllowed(interaction)) return;
+    if (await isOnCooldown(interaction)) return;
+
+    await interaction.deferUpdate();
+    await respondDrillFuel(interaction, priceMode, ownerId);
     return;
   }
 
