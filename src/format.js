@@ -1,5 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { PARTS } = require("./drillparts");
+const { getAuctionTaxRate, netSaleProceeds } = require("./auctions");
 
 const MEDALS = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟", "1️⃣1️⃣", "1️⃣2️⃣"];
 
@@ -247,7 +248,10 @@ const PRICE_MODE_LABEL = { BUYORDER: "Buy Order", INSTANT: "Instant Buy" };
 const OTHER_PRICE_MODE = { BUYORDER: "INSTANT", INSTANT: "BUYORDER" };
 const PRICE_MODE_SWITCH_LABEL = { BUYORDER: "Switch to Instant Buy", INSTANT: "Switch to Buy Order" };
 
-function buildDrillPartsEmbed(startKey, endKey, priceMode, priced, lowestBin) {
+// `bins` is { start, end } lowest-active-BIN prices (number | null), or
+// undefined if the AH lookup wasn't attempted/failed entirely. `start` is
+// only ever populated when a starting part was given.
+function buildDrillPartsEmbed(startKey, endKey, priceMode, priced, bins) {
   const endLabel = PARTS[endKey].label;
   const endIcon = emojiTag(PARTS[endKey].icon);
   const startLabel = startKey ? PARTS[startKey].label : null;
@@ -276,20 +280,53 @@ function buildDrillPartsEmbed(startKey, endKey, priceMode, priced, lowestBin) {
 
   embed.addFields({ name: "Total Cost", value: `**${fmtCoinsShort(priced.grandTotal)} coins**`, inline: false });
 
-  if (lowestBin !== undefined) {
-    if (lowestBin === null) {
-      embed.addFields({ name: "Lowest Active BIN", value: "No active BIN listings found.", inline: false });
+  if (bins !== undefined) {
+    if (!startKey) {
+      // From scratch: forging vs. just buying the end part outright.
+      if (bins.end == null) {
+        embed.addFields({ name: "Lowest Active BIN", value: "No active BIN listings found.", inline: false });
+      } else {
+        const diff = Math.abs(priced.grandTotal - bins.end);
+        const verdict =
+          priced.grandTotal < bins.end
+            ? `Forging is **${fmtCoinsShort(diff)} cheaper** than buying.`
+            : `Buying is **${fmtCoinsShort(diff)} cheaper** than forging.`;
+        embed.addFields({
+          name: "Lowest Active BIN",
+          value: `**${fmtCoinsShort(bins.end)} coins**\n${verdict}`,
+          inline: false,
+        });
+      }
     } else {
-      const diff = Math.abs(priced.grandTotal - lowestBin);
-      const verdict =
-        priced.grandTotal < lowestBin
-          ? `Forging is **${fmtCoinsShort(diff)} cheaper** than buying.`
-          : `Buying is **${fmtCoinsShort(diff)} cheaper** than forging.`;
-      embed.addFields({
-        name: "Lowest Active BIN",
-        value: `**${fmtCoinsShort(lowestBin)} coins**\n${verdict}`,
-        inline: false,
-      });
+      // Upgrading from an owned part: forging vs. selling that part on the
+      // AH and buying the end part outright instead.
+      if (bins.start == null || bins.end == null) {
+        const missingLabel = bins.start == null ? startLabel : endLabel;
+        embed.addFields({
+          name: "Sell & Rebuy Alternative",
+          value: `No active BIN listing found for **${missingLabel}**.`,
+          inline: false,
+        });
+      } else {
+        // AH tax only applies to the side you SELL - buying the end part
+        // outright is untaxed.
+        const taxRate = getAuctionTaxRate(bins.start);
+        const startProceeds = netSaleProceeds(bins.start);
+        const netCost = bins.end - startProceeds;
+        const diff = Math.abs(priced.grandTotal - netCost);
+        const verdict =
+          priced.grandTotal < netCost
+            ? `Forging is **${fmtCoinsShort(diff)} cheaper** than selling & rebuying.`
+            : `Selling & rebuying is **${fmtCoinsShort(diff)} cheaper** than forging.`;
+        embed.addFields({
+          name: "Sell & Rebuy Alternative",
+          value:
+            `Buy ${endIcon} **${endLabel}**: +${fmtCoinsShort(bins.end)}\n` +
+            `Sell ${startIcon} **${startLabel}**: -${fmtCoinsShort(startProceeds)} _(after ${(taxRate * 100).toFixed(1)}% AH tax)_\n` +
+            `Net cost: **${fmtCoinsShort(netCost)} coins**\n${verdict}`,
+          inline: false,
+        });
+      }
     }
   }
 

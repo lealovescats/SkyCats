@@ -150,4 +150,23 @@ async function getLowestBin(partKey) {
   return promise;
 }
 
-module.exports = { getLowestBin };
+/**
+ * Hypixel's Auction House tax, which only applies when SELLING (never when
+ * buying):
+ *  - Listing tax: flat rate on the full price based on which bracket it
+ *    falls into - under 10M = 1%, 10M-100M = 2%, over 100M = 2.5%.
+ *  - Collection tax: an additional 1%, stacking on top of the listing tax,
+ *    for any item priced 1M coins or more.
+ */
+function getAuctionTaxRate(price) {
+  const listingRate = price < 10_000_000 ? 0.01 : price <= 100_000_000 ? 0.02 : 0.025;
+  const collectionRate = price >= 1_000_000 ? 0.01 : 0;
+  return listingRate + collectionRate;
+}
+
+/** What you actually receive after AH tax for selling at this price. */
+function netSaleProceeds(price) {
+  return price * (1 - getAuctionTaxRate(price));
+}
+
+module.exports = { getLowestBin, getAuctionTaxRate, netSaleProceeds };

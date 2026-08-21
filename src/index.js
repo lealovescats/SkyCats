@@ -148,21 +148,24 @@ async function respondDrillParts(interaction, startKey, endKey, priceMode, steps
     const products = await getBazaarProducts();
     const priced = priceMaterials(products, computeRawMaterials(steps), priceMode);
 
-    // Only worth comparing against the AH when forging from scratch - a
-    // partial upgrade isn't something you'd ever just buy outright instead.
-    // undefined = don't show the section at all (start given, or the AH
-    // fetch failed); null = fetch succeeded but no active BIN exists.
-    let lowestBin;
-    if (!startKey) {
-      try {
-        lowestBin = await getLowestBin(endKey);
-      } catch (err) {
-        console.error("Failed to fetch lowest BIN:", err);
-        lowestBin = undefined;
+    // From scratch: compare forging against just buying the end part.
+    // With a start: compare forging against selling the start part and
+    // buying the end part instead. `bins` stays undefined (section hidden
+    // entirely) if the AH lookup fails outright.
+    let bins;
+    try {
+      if (startKey) {
+        const [startBin, endBin] = await Promise.all([getLowestBin(startKey), getLowestBin(endKey)]);
+        bins = { start: startBin, end: endBin };
+      } else {
+        bins = { start: null, end: await getLowestBin(endKey) };
       }
+    } catch (err) {
+      console.error("Failed to fetch lowest BIN:", err);
+      bins = undefined;
     }
 
-    const embed = buildDrillPartsEmbed(startKey, endKey, priceMode, priced, lowestBin);
+    const embed = buildDrillPartsEmbed(startKey, endKey, priceMode, priced, bins);
     const components = [buildDrillPartsComponents(startKey, endKey, priceMode, ownerId)];
     await interaction.editReply({ embeds: [embed], components });
 
